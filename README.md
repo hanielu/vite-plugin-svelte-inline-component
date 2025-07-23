@@ -27,19 +27,6 @@
 
 The plugin lets you write Svelte components directly in your `.ts` or `.js` test files. It finds every template literal whose **tag** matches a list you choose (defaults to `html` and `svelte`), compiles the markup with the Svelte compiler, and replaces it with an `import` of a virtual module that exports the compiled component. No extra files.
 
-```tsx
-// Define a component with props right in your test file or script.
-const Button = html`
-  <script>
-    export let label;
-  </script>
-
-  <button>{label}</button>
-`;
-```
-
----
-
 ## 🔧 Installation
 
 ```bash
