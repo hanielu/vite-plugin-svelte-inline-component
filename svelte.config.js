@@ -14,7 +14,7 @@ const config = {
     adapter: adapter(),
 
     alias: {
-      inline: "./plugins/inline-component.js",
+      inline: "./src/lib/index.js",
     },
   },
 };

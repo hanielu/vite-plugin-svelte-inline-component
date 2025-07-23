@@ -7,8 +7,8 @@ import { MemoryRouter, Routes, Route } from "@hvniel/svelte-router";
 */
 
 describe("Inline Svelte Components with sv", () => {
-  it("renders a simple component", async () => {
-    const SimpleComponent = await html`<h1>Hello World</h1>`;
+  it("renders a simple component", () => {
+    const SimpleComponent = html`<h1>Hello World</h1>`;
     const renderer = render(SimpleComponentParent, {
       children: SimpleComponent,
     });
@@ -26,8 +26,8 @@ describe("Inline Svelte Components with sv", () => {
     `);
   });
 
-  it("renders a component with props", async () => {
-    const ComponentWithProps = await html`
+  it("renders a component with props", () => {
+    const ComponentWithProps = html`
       <script>
         let { name } = $props();
       </script>
@@ -45,7 +45,7 @@ describe("Inline Svelte Components with sv", () => {
   });
 
   it("supports reactive components", async () => {
-    const ReactiveComponent = await html`
+    const ReactiveComponent = html`
       <script>
         let count = $state(0);
 
@@ -67,8 +67,8 @@ describe("Inline Svelte Components with sv", () => {
     expect(button).toHaveTextContent("Count: 1");
   });
 
-  it("supports component with children", async () => {
-    const Layout = await html`
+  it("supports component with children", () => {
+    const Layout = html`
       <script>
         let { children } = $props();
       </script>
@@ -80,7 +80,7 @@ describe("Inline Svelte Components with sv", () => {
       </div>
     `;
 
-    const Content = await html`<p>Content goes here</p>`;
+    const Content = html`<p>Content goes here</p>`;
 
     const { getByLabelText } = render(Layout, {
       children: Content,
@@ -93,11 +93,11 @@ describe("Inline Svelte Components with sv", () => {
     expect(layout).toHaveTextContent("Footer");
   });
 
-  it("works with router components", async () => {
-    const HomeComponent = await html`<h1>Home Page</h1>`;
-    const AboutComponent = await html`<h1>About Page</h1>`;
+  it("works with router components", () => {
+    const HomeComponent = html`<h1>Home Page</h1>`;
+    const AboutComponent = html`<h1>About Page</h1>`;
 
-    const App = await html`
+    const App = html`
       <script>
 				let {HomeComponent, AboutComponent} = $props();
       </script>
@@ -118,6 +118,21 @@ describe("Inline Svelte Components with sv", () => {
     expect(renderer.container.firstElementChild).toMatchInlineSnapshot(`
       <h1>
         Home Page
+      </h1>
+    `);
+  });
+
+  it("allows duplicate components", () => {
+    const Component1 = html`<h1>Hello World</h1>`;
+    const Component2 = html`<h1>Hello World</h1>`;
+
+    const renderer = render(Component1, {
+      children: Component2,
+    });
+
+    expect(renderer.container.firstElementChild).toMatchInlineSnapshot(`
+      <h1>
+        Hello World
       </h1>
     `);
   });
