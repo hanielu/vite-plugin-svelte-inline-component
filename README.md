@@ -4,6 +4,21 @@
 
 ---
 
+## 📖 Table of Contents
+
+- [✨ What it does](#-what-it-does)
+- [🔧 Installation](#-installation)
+- [🚀 Usage](#-usage)
+  - [vite.config.ts / vite.config.js](#viteconfigts--viteconfigjs)
+  - [Declaring the global tag helper](#declaring-the-global-tag-helper)
+- [🧪 Testing inline & reactive components](#-testing-inline--reactive-components)
+- [🚦 Import fences](#-import-fences)
+- [🛠️ API](#-api)
+  - [`InlineSvelteOptions`](#inlinesvelteoptions)
+- [🧐 How it works (nutshell)](#-how-it-works-nutshell)
+- [⚠️ Caveats](#-caveats)
+- [📝 License](#-license)
+
 ## ✨ What it does
 
 ```ts
@@ -99,6 +114,40 @@ it("supports reactive components", async () => {
 ```
 
 ➡️ **Tip:** conditionally enable the plugin in your `vite.config.*` so it’s active during test runs but not during production builds.
+
+## 🚦 Import fences
+
+Need the same helpers in lots of inline components?  
+Wrap ordinary ES‑imports in a comment block at the top of the file:
+
+```tsx
+/* svelte:imports
+import { fireEvent } from "@testing-library/svelte";
+import utils from "./test-utils.js";
+*/
+
+const Thing1 = html`
+  <script>
+    let n = $state(0);
+    function inc() {
+      n++;
+    }
+  </script>
+
+  <button on:click="{inc}">{utils.label}: {n}</button>
+`;
+
+const Thing2 = html`
+  <script>
+    let n = $state(0);
+    function inc() {
+      n++;
+    }
+  </script>
+
+  <button on:click="{inc}">{utils.label}: {n}</button>
+`;
+```
 
 ---
 

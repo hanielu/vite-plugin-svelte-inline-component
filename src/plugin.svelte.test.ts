@@ -2,6 +2,10 @@ import { describe, it, expect } from "vitest";
 import { render } from "vitest-browser-svelte";
 import SimpleComponentParent from "./plugin.svelte";
 
+/* svelte:imports
+import { MemoryRouter, Routes, Route } from "@hvniel/svelte-router";
+*/
+
 describe("Inline Svelte Components with sv", () => {
   it("renders a simple component", async () => {
     const SimpleComponent = await html`<h1>Hello World</h1>`;
@@ -95,7 +99,6 @@ describe("Inline Svelte Components with sv", () => {
 
     const App = await html`
       <script>
-        import { MemoryRouter, Routes, Route } from "@hvniel/svelte-router";
 				let {HomeComponent, AboutComponent} = $props();
       </script>
 
