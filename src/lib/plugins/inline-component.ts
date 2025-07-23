@@ -58,7 +58,7 @@ export default function inlineSveltePlugin({
   const templateCache = new Map<string, string>(); // virtualId → source markup
 
   return {
-    name: "vite:inline-svelte",
+    name: "vite-plugin-svelte-inline-component",
     enforce: "pre",
 
     /**
