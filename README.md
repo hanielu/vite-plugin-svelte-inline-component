@@ -57,19 +57,6 @@ export default defineConfig(({ mode }) => ({
 > **Why conditionally enable?**
 > In a typical SvelteKit project you already compile `.svelte` files. Turning the plugin on just for unit tests keeps production builds untouched while giving Vitest access to inline components.
 
-### Declaring the global tag helper
-
-Put this near the top level of your project (e.g. `src/app.d.ts` for SvelteKit, or `vite.d.ts` for plain Vite) to make tags like `html` globally available without imports.
-
-```ts
-// src/app.d.ts
-declare global {
-  /** Inline Svelte component helper – provided by the plugin */
-  const html: import("@hvniel/vite-plugin-svelte-inline-component").InlineComponent;
-}
-export {};
-```
-
 ---
 
 ## 🧩 Named Exports & Snippets
@@ -80,6 +67,7 @@ The plugin makes any named exports available as properties on the component itse
 
 ```tsx
 import { html, type InlineSnippet } from "@hvniel/vite-plugin-svelte-inline-component";
+
 const ComponentWithSnippets = html`
   <script lang="ts" module>
     // These snippets will be attached to the component export
@@ -114,6 +102,7 @@ To make TypeScript aware of your named exports, you'll need to use a type assert
 
 ```ts
 import { html, type InlineSnippet } from "@hvniel/vite-plugin-svelte-inline-component";
+
 const defaultExport = html`
   <script module>
     export { element };
