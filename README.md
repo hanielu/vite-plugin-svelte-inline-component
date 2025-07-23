@@ -141,7 +141,7 @@ The plugin is perfect for writing component tests without creating separate `.sv
 Here’s a sample test that proves reactivity with **Svelte 5 runes** works out of the box:
 
 ```tsx
-import { render } from "@testing-library/svelte";
+import { render } from "vitest-browser-svelte";
 
 it("supports reactive components", async () => {
   const ReactiveComponent = html`
