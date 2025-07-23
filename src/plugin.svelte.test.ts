@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { render } from "vitest-browser-svelte";
 import SimpleComponentParent from "./plugin.svelte";
+import type { InlineSnippet } from "inline";
+import { page } from "@vitest/browser/context";
 
 /* svelte:imports
 import { MemoryRouter, Routes, Route } from "@hvniel/svelte-router";
@@ -57,8 +59,9 @@ describe("Inline Svelte Components with sv", () => {
       <button onclick="{increment}">Count: {count}</button>
     `;
 
-    const { getByRole } = render(ReactiveComponent);
-    const button = getByRole("button");
+    const renderer = render(ReactiveComponent);
+
+    const button = renderer.getByRole("button");
 
     expect(button).toHaveTextContent("Count: 0");
 
@@ -134,6 +137,60 @@ describe("Inline Svelte Components with sv", () => {
       <h1>
         Hello World
       </h1>
+    `);
+  });
+
+  it("allows exported snippets", () => {
+    const defaultExport = html`
+      <script module>
+        export { element1, element2 };
+      </script>
+
+      {#snippet element1(html)} {@html html} {/snippet} {#snippet element2(html)} {@html html}
+      {/snippet}
+    `;
+
+    const { element1, element2 } = defaultExport as unknown as {
+      element1: InlineSnippet;
+      element2: InlineSnippet;
+    };
+
+    expect(element1).toBeDefined();
+    expect(element2).toBeDefined();
+
+    // console.log("[defaultExport]", defaultExport.toString());
+    // console.log("[defaultExport.element1]", element1.toString());
+    // console.log("[defaultExport.element2]", element2.toString());
+  });
+
+  it("allows exported snippets with props", () => {
+    const ComponentWithSnippets = html`
+      <script module>
+        export { header };
+      </script>
+
+      {#snippet header(text)}
+      <header>
+        <h1>{text}</h1>
+      </header>
+      {/snippet}
+    `;
+
+    // Now you can render the component and pass snippets to it
+    const { header } = ComponentWithSnippets as unknown as {
+      header: InlineSnippet<string>;
+    };
+
+    const renderer = render(anchor => {
+      header(anchor, () => "Welcome!");
+    });
+
+    expect(renderer.container.firstElementChild).toMatchInlineSnapshot(`
+      <header>
+        <h1>
+          Welcome!
+        </h1>
+      </header>
     `);
   });
 });
