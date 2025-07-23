@@ -46,7 +46,7 @@ yarn add -D @hvniel/vite-plugin-svelte-inline-component
 ```ts
 import { defineConfig } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
-import { inlineSveltePlugin } from "@hvniel/vite-plugin-svelte-inline-component";
+import inlineSveltePlugin from "@hvniel/vite-plugin-svelte-inline-component/plugin";
 
 export default defineConfig(({ mode }) => ({
   plugins: [mode === "test" && inlineSveltePlugin(), sveltekit()],
@@ -79,6 +79,7 @@ Just like regular Svelte files, you can use `<script context="module">` (or `<sc
 The plugin makes any named exports available as properties on the component itself.
 
 ```tsx
+import { html, type InlineSnippet } from "@hvniel/vite-plugin-svelte-inline-component";
 const ComponentWithSnippets = html`
   <script lang="ts" module>
     // These snippets will be attached to the component export
@@ -112,8 +113,7 @@ const renderer = render(anchor => {
 To make TypeScript aware of your named exports, you'll need to use a type assertion.
 
 ```ts
-import type { InlineSnippet } from "@hvniel/vite-plugin-svelte-inline-component";
-
+import { html, type InlineSnippet } from "@hvniel/vite-plugin-svelte-inline-component";
 const defaultExport = html`
   <script module>
     export { element };
@@ -142,6 +142,7 @@ Here’s a sample test that proves reactivity with **Svelte 5 runes** works out 
 
 ```tsx
 import { render } from "vitest-browser-svelte";
+import { html, type InlineSnippet } from "@hvniel/vite-plugin-svelte-inline-component";
 
 it("supports reactive components", async () => {
   const ReactiveComponent = html`

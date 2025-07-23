@@ -1,6 +1,6 @@
 import { sveltekit } from "@sveltejs/kit/vite";
 import { defineConfig } from "vite";
-import { inlineSveltePlugin } from "./src/lib/index.js";
+import inlineSveltePlugin from "./src/lib/plugin/index.js";
 
 export default defineConfig(({ mode }) => {
   return {

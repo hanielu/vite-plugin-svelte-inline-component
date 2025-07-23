@@ -1,6 +1,6 @@
 {
   "name": "@hvniel/vite-plugin-svelte-inline-component",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "license": "MIT",
   "author": "Haniel Ubogu <https://github.com/HanielU>",
   "repository": {
@@ -34,6 +34,10 @@
       "types": "./dist/index.d.ts",
       "svelte": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./plugin": {
+      "types": "./dist/plugin/index.d.ts",
+      "default": "./dist/plugin/index.js"
     }
   },
   "peerDependencies": {
