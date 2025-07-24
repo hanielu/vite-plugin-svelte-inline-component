@@ -4,7 +4,14 @@ import inlineSveltePlugin from "./src/lib/plugin/index.js";
 
 export default defineConfig(({ mode }) => {
   return {
-    plugins: [mode === "test" && inlineSveltePlugin(), sveltekit()],
+    plugins: [
+      mode === "test" &&
+        inlineSveltePlugin({
+          globalsStart: "// svelte:globals",
+          globalsEnd: "// sg",
+        }),
+      sveltekit(),
+    ],
     test: {
       projects: [
         {

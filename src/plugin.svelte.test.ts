@@ -8,9 +8,10 @@ import { page } from "@vitest/browser/context";
 import { MemoryRouter, Routes, Route } from "@hvniel/svelte-router";
 */
 
-/* svelte:globals
+// svelte:globals
 const Frank = html`<h1>Frank</h1>`;
-*/
+const count = $state(0);
+// sg
 
 describe("Inline Svelte Components with sv", () => {
   it("renders a simple component", () => {
@@ -130,10 +131,9 @@ describe("Inline Svelte Components with sv", () => {
   });
 
   it("allows duplicate components", () => {
-    const Component1 = html`<h1>Hello World</h1>`;
     const Component2 = html`<h1>Hello World</h1>`;
 
-    const renderer = render(Component1, {
+    const renderer = render(html`<h1>Hello World</h1>`, {
       children: Component2,
     });
 
@@ -199,8 +199,7 @@ describe("Inline Svelte Components with sv", () => {
   });
 
   it("supports global components", () => {
-    const Page = html`<div><Frank /></div>`;
-    const renderer = render(Page);
+    const renderer = render(html`<div><Frank />{count}</div>`);
 
     expect(renderer.container.firstElementChild).toMatchInlineSnapshot(`
       <div>
@@ -208,6 +207,7 @@ describe("Inline Svelte Components with sv", () => {
           Frank
         </h1>
         <!---->
+        0
       </div>
     `);
   });
