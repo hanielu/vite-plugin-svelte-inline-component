@@ -4,14 +4,16 @@ import MagicString from "magic-string";
 import type { Plugin } from "vite";
 
 export interface InlineSvelteOptions {
-  /** Template-tag names treated as Svelte markup. Default: `["html", "svelte"]` */
+  /** Template-tag names treated as Svelte markup – default `["html", "svelte"]` */
   tags?: string[];
-  /** Comment that *starts* an import fence. Default: `/* svelte:imports` */
+  /** Comment that *starts* an import fence – default `/* svelte:imports` */
   fenceStart?: string;
-  /** Comment that *ends* an import fence. Default: `*\/` */
+  /** Comment that *ends* an import fence – default `*\/` */
   fenceEnd?: string;
-  /** Comment that *starts* a global components fence. Default: `/* svelte:globals` */
-  globalsFenceStart?: string;
+  /** Comment that *starts* a globals fence – default `/* svelte:globals` */
+  globalsStart?: string;
+  /** Comment that *ends* a globals fence – default `*\/` */
+  globalsEnd?: string;
 }
 
 /* ───────── helpers ───────── */
@@ -19,19 +21,17 @@ export interface InlineSvelteOptions {
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const isUserSource = (id: string) => !id.includes("/node_modules/") && /\.(c?[tj]sx?)$/.test(id);
 
-/** Injects a string of script content into a Svelte component's markup. */
-function applyScriptContent(markup: string, scriptContent: string): string {
-  if (!scriptContent) return markup;
+/** Inject shared imports without duplicating instance `<script>` blocks */
+function applyImports(markup: string, imports: string): string {
+  if (!imports) return markup;
 
   const scriptRE = /<script(?![^>]*context=["']module["'])[^>]*>/i;
-  const match = scriptRE.exec(markup);
-
-  if (match) {
-    const idx = match.index + match[0].length;
-    return `${markup.slice(0, idx)}\n${scriptContent}\n${markup.slice(idx)}`;
-  } else {
-    return `<script>\n${scriptContent}\n</script>\n${markup}`;
+  const m = scriptRE.exec(markup);
+  if (m) {
+    const idx = m.index + m[0].length;
+    return markup.slice(0, idx) + "\n" + imports + "\n" + markup.slice(idx);
   }
+  return `<script>\n${imports}\n</script>\n` + markup;
 }
 
 /* ───────── plugin ───────── */
@@ -40,149 +40,132 @@ export default function inlineSveltePlugin({
   tags = ["html", "svelte"],
   fenceStart = "/* svelte:imports",
   fenceEnd = "*/",
-  globalsFenceStart = "/* svelte:globals",
+  globalsStart = "/* svelte:globals",
+  globalsEnd = "*/",
 }: InlineSvelteOptions = {}): Plugin {
   const tagGroup = tags.map(esc).join("|");
-  const tplRE = new RegExp(
-    `(?:const|let|var)\\s+([a-zA-Z0-9_$]+)\\s*=\\s*(?:${tagGroup})\\s*\`([\\s\\S]*?)\``,
-    "g"
-  );
-  const importsFenceRE = new RegExp(`${esc(fenceStart)}([\\s\\S]*?)${esc(fenceEnd)}`, "m");
-  const globalsFenceRE = new RegExp(`${esc(globalsFenceStart)}([\\s\\S]*?)${esc(fenceEnd)}`, "m");
+  const tplRE = new RegExp(`(?:${tagGroup})\\s*\`([\\s\\S]*?)\``, "g");
+  const fenceRE = new RegExp(`${esc(fenceStart)}([\\s\\S]*?)${esc(fenceEnd)}`, "m");
+  const globalsRE = new RegExp(`${esc(globalsStart)}([\\s\\S]*?)${esc(globalsEnd)}`, "m");
+  const globalDefRE = /const\s+([a-zA-Z0-9_$]+)\s*=\s*(?:html|svelte)\s*\`([\s\S]*?)\`/g;
 
-  const VIRT_PREFIX = "virtual:inline-svelte/";
-  const RSLV_PREFIX = `\0${VIRT_PREFIX}`;
+  const VIRT = "virtual:inline-svelte/";
+  const RSLV = "\0" + VIRT;
 
+  /** virtualId → full markup (with injected imports) */
   const cache = new Map<string, string>();
 
   return {
-    name: "@hvniel/vite-plugin-svelte-inline-component-v3",
+    name: "@hvniel/vite-plugin-svelte-inline-component",
     enforce: "pre",
 
     transform(code, id) {
-      if (!isUserSource(id) || !tags.some(tag => code.includes(tag))) {
-        return;
-      }
+      if (!isUserSource(id)) return;
 
       const ms = new MagicString(code);
       let edited = false;
 
-      // === STAGE 1: Process `svelte:imports` fence ===
-      const importsMatch = importsFenceRE.exec(code);
-      const standardImports = (importsMatch?.[1] ?? "").trim();
+      /* file‑level shared imports (may be empty) */
+      const imports = (fenceRE.exec(code)?.[1] ?? "").trim();
 
-      // === STAGE 2: Process `svelte:globals` fence ===
-      const globalsMatch = globalsFenceRE.exec(code);
-      // This will hold the full script block (imports + consts) for global components
-      let globalScriptBlock = "";
-      const hashToLocal = new Map<string, string>();
+      let importsToAdd = "";
+      let constsToAdd = "";
+      let globalImportsForTpl = "";
+      const hashToLocal = new Map<string, string>(); // dedupe within THIS pass
 
+      /* 1. Process globals */
+      const globalsMatch = globalsRE.exec(code);
       if (globalsMatch) {
-        const globalsContent = globalsMatch[1];
-        const globalsStartIndex = globalsMatch.index;
-        let match: RegExpExecArray | null;
+        edited = true;
+        const globalsContent = globalsMatch[1] ?? "";
+        // Overwrite the entire globals block so it's removed from the final output
+        ms.overwrite(globalsMatch.index, globalsMatch.index + globalsMatch[0].length, "");
 
-        tplRE.lastIndex = 0; // Reset regex before scanning fence content
-        while ((match = tplRE.exec(globalsContent))) {
-          const [fullMatch, componentName, rawMarkup] = match;
-
-          const finalMarkup = applyScriptContent(rawMarkup, standardImports);
-          const hash = createHash("sha1").update(finalMarkup).digest("hex").slice(0, 8);
+        let defMatch: RegExpExecArray | null;
+        while ((defMatch = globalDefRE.exec(globalsContent))) {
+          const compName = defMatch[1];
+          const rawMarkup = defMatch[2];
+          // Globals can also use file-level imports from the `svelte:imports` fence
+          const markup = applyImports(rawMarkup, imports);
+          const hash = createHash("sha1").update(markup).digest("hex").slice(0, 8);
 
           let local = hashToLocal.get(hash);
           if (!local) {
-            local = `_Inline_${hash}`;
+            local = `Inline_${hash}`;
             hashToLocal.set(hash, local);
 
-            const virtId = `${VIRT_PREFIX}${hash}.js`;
-            if (!cache.has(virtId)) cache.set(virtId, finalMarkup);
+            const virt = `${VIRT}${hash}.js`;
+            if (!cache.has(virt)) cache.set(virt, markup);
 
-            const ns = `_InlineNS_${hash}`;
-            const importStatement = `import * as ${ns} from '${virtId}';`;
-            const localDefStatement = `const ${local} = Object.assign(${ns}.default, ${ns});`;
+            const ns = `__InlineNS_${hash}`;
+            importsToAdd +=
+              `import * as ${ns} from '${virt}';\n` +
+              `const ${local}=Object.assign(${ns}.default, ${ns});\n`;
 
-            // Prepend the import to the top of the file for resolution
-            ms.prepend(`${importStatement}\n${localDefStatement}\n`);
-
-            // **FIX**: Build a full script block to inject into local components
-            // This includes the necessary import and the const declarations.
-            const aliasStatement = `const ${componentName} = ${local};`;
-            globalScriptBlock += `${importStatement}\n${localDefStatement}\n${aliasStatement}\n`;
-          } else {
-            // If the component was already processed, just add its alias declaration
-            globalScriptBlock += `const ${componentName} = ${local};\n`;
+            // This import will be injected into the <script> of other templates
+            globalImportsForTpl += `import ${compName} from '${virt}';\n`;
           }
-
-          ms.overwrite(
-            globalsStartIndex + match.index,
-            globalsStartIndex + match.index + fullMatch.length,
-            `const ${componentName} = ${local};`
-          );
-          edited = true;
+          // Create the top-level constant for the global component
+          constsToAdd += `const ${compName} = ${local};\n`;
         }
-        ms.remove(globalsStartIndex, globalsStartIndex + globalsMatch[0].length);
       }
 
-      // === STAGE 3: Process remaining "local" inline components ===
-      let match: RegExpExecArray | null;
-      tplRE.lastIndex = 0;
-
-      while ((match = tplRE.exec(code))) {
+      /* 2. Process all regular templates */
+      let m: RegExpExecArray | null;
+      tplRE.lastIndex = 0; // Reset regex state
+      while ((m = tplRE.exec(code))) {
+        // Skip any templates found inside the globals block, as they've already been processed.
         if (
           globalsMatch &&
-          match.index >= globalsMatch.index &&
-          match.index < globalsMatch.index + globalsMatch[0].length
+          m.index >= globalsMatch.index &&
+          m.index < globalsMatch.index + globalsMatch[0].length
         ) {
           continue;
         }
 
-        const [fullMatch, componentName, rawMarkup] = match;
-
-        // Inject standard imports AND the full script block for global components
-        const scriptToInject = `${standardImports}\n${globalScriptBlock}`;
-        const finalMarkup = applyScriptContent(rawMarkup, scriptToInject);
-
-        const hash = createHash("sha1").update(finalMarkup).digest("hex").slice(0, 8);
+        const rawMarkup = m[1];
+        // Inject imports for global components first, then file-level imports
+        const markupWithGlobals = applyImports(rawMarkup, globalImportsForTpl);
+        const markup = applyImports(markupWithGlobals, imports);
+        const hash = createHash("sha1").update(markup).digest("hex").slice(0, 8);
 
         let local = hashToLocal.get(hash);
         if (!local) {
-          local = `_Inline_${hash}`;
+          local = `Inline_${hash}`;
           hashToLocal.set(hash, local);
 
-          const virtId = `${VIRT_PREFIX}${hash}.js`;
-          if (!cache.has(virtId)) cache.set(virtId, finalMarkup);
+          const virt = `${VIRT}${hash}.js`;
+          if (!cache.has(virt)) cache.set(virt, markup);
 
-          const ns = `_InlineNS_${hash}`;
-          ms.prepend(
-            `import * as ${ns} from '${virtId}';\n` +
-              `const ${local} = Object.assign(${ns}.default, ${ns});\n`
-          );
+          const ns = `__InlineNS_${hash}`;
+          importsToAdd +=
+            `import * as ${ns} from '${virt}';\n` +
+            `const ${local}=Object.assign(${ns}.default, ${ns});\n`;
         }
 
-        ms.overwrite(
-          match.index,
-          match.index + fullMatch.length,
-          `const ${componentName} = ${local};`
-        );
+        ms.overwrite(m.index, tplRE.lastIndex, local);
         edited = true;
       }
 
-      if (!edited) return null;
+      /* 3. Prepend all generated code */
+      if (edited) {
+        // Prepend consts first, then imports, to respect declaration order.
+        ms.prepend(constsToAdd);
+        ms.prepend(importsToAdd);
+        return { code: ms.toString(), map: ms.generateMap({ hires: true }) };
+      }
 
-      return {
-        code: ms.toString(),
-        map: ms.generateMap({ hires: true }),
-      };
+      return null;
     },
 
     resolveId(id) {
-      return id.startsWith(VIRT_PREFIX) ? RSLV_PREFIX + id.slice(VIRT_PREFIX.length) : undefined;
+      return id.startsWith(VIRT) ? RSLV + id.slice(VIRT.length) : undefined;
     },
 
     load(id) {
-      if (!id.startsWith(RSLV_PREFIX)) return;
+      if (!id.startsWith(RSLV)) return;
 
-      const markup = cache.get(VIRT_PREFIX + id.slice(RSLV_PREFIX.length))!;
+      const markup = cache.get(VIRT + id.slice(RSLV.length))!;
       return compile(markup, {
         generate: "client",
         css: "injected",

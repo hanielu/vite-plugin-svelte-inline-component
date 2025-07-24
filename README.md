@@ -209,8 +209,9 @@ const Thing1 = html`
 | :------------------ | :--------- | :------------------- | :------------------------------------------------- |
 | `tags`              | `string[]` | `["html", "svelte"]` | Tag names to be treated as inline Svelte markup.   |
 | `fenceStart`        | `string`   | `/* svelte:imports`  | The comment that starts a standard import fence.   |
+| `fenceEnd`          | `string`   | `*/`                 | The comment that ends a standard import fence.     |
 | `globalsFenceStart` | `string`   | `/* svelte:globals`  | The comment that starts a global components fence. |
-| `fenceEnd`          | `string`   | `*/`                 | The comment that ends any fence.                   |
+| `globalsEnd`        | `string`   | `*/`                 | The comment that ends a global components fence.   |
 
 ---
 
