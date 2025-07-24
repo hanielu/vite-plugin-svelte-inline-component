@@ -1,6 +1,6 @@
 {
   "name": "@hvniel/vite-plugin-svelte-inline-component",
-  "version": "0.0.14",
+  "version": "0.0.15",
   "license": "MIT",
   "author": "Haniel Ubogu <https://github.com/HanielU>",
   "repository": {

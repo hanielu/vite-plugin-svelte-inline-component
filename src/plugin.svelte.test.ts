@@ -4,11 +4,9 @@ import SimpleComponentParent from "./plugin.svelte";
 import { html, type InlineSnippet } from "inline";
 import { page } from "@vitest/browser/context";
 
-/* svelte:imports
+// svelte:defs
 import { MemoryRouter, Routes, Route } from "@hvniel/svelte-router";
-*/
 
-// svelte:globals
 const Frank = html`<h1>Frank</h1>`;
 const James = html`<h1>James</h1>`;
 const James2 = html`<div><James /><Frank /></div>`;
@@ -24,7 +22,7 @@ const dupes = [
   },
 ];
 const dupe = dupes[0];
-// sg
+// sd
 
 describe("Inline Svelte Components with sv", () => {
   it("renders a simple component", () => {

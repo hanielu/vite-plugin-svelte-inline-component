@@ -10,8 +10,7 @@
 - [🔧 Installation](#-installation)
 - [🚀 Usage](#-usage)
   - [vite.config.ts / vite.config.js](#viteconfigts--viteconfigjs)
-- [🌍 Global Components](#-global-components)
-- [🚦 Import Fences](#-import-fences)
+- [🧱 Definitions Fence](#-definitions-fence)
 - [🧩 Named Exports & Snippets](#-named-exports--snippets)
 - [🧪 Testing Inline & Reactive Components](#-testing-inline--reactive-components)
 - [🛠️ API](#️-api)
@@ -58,24 +57,28 @@ export default defineConfig(({ mode }) => ({
 
 ---
 
-## 🌍 Global Components
+## 🧱 Definitions Fence
 
-You can define components inside a special `/* svelte:globals */` fence to make them automatically available to all other inline components in the same file. This is perfect for defining shared UI elements or mocks without manual imports.
+To share code across multiple inline components in the same file, wrap your ES imports, variables, and "global" component definitions in a special comment block. The plugin will make everything inside this fence available to each inline component's script block.
 
-```typescript
-/* svelte:globals
-  // Any component defined here is "global" to this file.
+````tsx
+/* svelte:definitions
+  import { tick } from "svelte";
+
+  // Available to all inline components in this file
+  const sharedClass = "text-red-500";
+
+  // This component is also globally available
   const GlobalButton = html`<button on:click>Click Me!</button>`;
 */
 
-// ✅ GlobalButton is now available here automatically.
-const Page = html`
-  <section>
-    <p>Welcome to the page.</p>
-    <GlobalButton />
-  </section>
+const Thing1 = html`
+  <script>
+    let n = $state(0);
+  </script>
+  <button class="{sharedClass}" onclick={() => n++}>Button: {n}</button>
+  <GlobalButton />
 `;
-```
 
 ---
 
@@ -114,7 +117,7 @@ const { header, footer } = ComponentWithSnippets as unknown as {
 const renderer = render(anchor => {
   header(anchor, () => "Welcome!");
 });
-```
+````
 
 ### Typing Named Exports
 
@@ -179,39 +182,17 @@ it("supports reactive components", async () => {
 
 ---
 
-## 🚦 Import Fences
-
-To share imports across multiple inline components in the same file, wrap your ES imports in a special comment block. The plugin will inject them into each inline component's script block.
-
-```tsx
-/* svelte:imports
-import { fireEvent } from "@testing-library/svelte";
-import utils from "./test-utils.js";
-*/
-
-const Thing1 = html`
-  <script>
-    let n = $state(0);
-  </script>
-  <button onclick={() => n++}>{utils.label}: {n}</button>
-`;
-```
-
----
-
 ## 🛠️ API
 
 `inlineSveltePlugin(options?: InlineSvelteOptions): Plugin;`
 
 ### `InlineSvelteOptions`
 
-| option              | type       | default              | description                                        |
-| :------------------ | :--------- | :------------------- | :------------------------------------------------- |
-| `tags`              | `string[]` | `["html", "svelte"]` | Tag names to be treated as inline Svelte markup.   |
-| `fenceStart`        | `string`   | `/* svelte:imports`  | The comment that starts a standard import fence.   |
-| `fenceEnd`          | `string`   | `*/`                 | The comment that ends a standard import fence.     |
-| `globalsFenceStart` | `string`   | `/* svelte:globals`  | The comment that starts a global components fence. |
-| `globalsEnd`        | `string`   | `*/`                 | The comment that ends a global components fence.   |
+| option       | type       | default                 | description                                      |
+| :----------- | :--------- | :---------------------- | :----------------------------------------------- |
+| `tags`       | `string[]` | `["html", "svelte"]`    | Tag names to be treated as inline Svelte markup. |
+| `fenceStart` | `string`   | `/* svelte:definitions` | The comment that starts a standard import fence. |
+| `fenceEnd`   | `string`   | `*/`                    | The comment that ends a standard import fence.   |
 
 ---
 

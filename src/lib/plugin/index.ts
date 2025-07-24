@@ -6,14 +6,10 @@ import type { Plugin } from "vite";
 export interface InlineSvelteOptions {
   /** Template-tag names treated as Svelte markup – default `["html", "svelte"]` */
   tags?: string[];
-  /** Comment that *starts* an import fence – default `/* svelte:imports` */
+  /** Comment that *starts* a definitions fence – default `/* svelte:definitions` */
   fenceStart?: string;
-  /** Comment that *ends* an import fence – default `*\/` */
+  /** Comment that *ends* a definitions fence – default `*\/` */
   fenceEnd?: string;
-  /** Comment that *starts* a globals fence – default `/* svelte:globals` */
-  globalsStart?: string;
-  /** Comment that *ends* a globals fence – default `*\/` */
-  globalsEnd?: string;
 }
 
 /* ───────── helpers ───────── */
@@ -21,17 +17,17 @@ export interface InlineSvelteOptions {
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const isUserSource = (id: string) => !id.includes("/node_modules/") && /\.(c?[tj]sx?)$/.test(id);
 
-/** Inject shared imports without duplicating instance `<script>` blocks */
-function applyImports(markup: string, imports: string): string {
-  if (!imports) return markup;
+/** Inject shared code without duplicating instance `<script>` blocks */
+function applySharedCode(markup: string, code: string): string {
+  if (!code) return markup;
 
   const scriptRE = /<script(?![^>]*context=["']module["'])[^>]*>/i;
   const m = scriptRE.exec(markup);
   if (m) {
     const idx = m.index + m[0].length;
-    return markup.slice(0, idx) + "\n" + imports + "\n" + markup.slice(idx);
+    return markup.slice(0, idx) + "\n" + code + "\n" + markup.slice(idx);
   }
-  return `<script>\n${imports}\n</script>\n` + markup;
+  return `<script>\n${code}\n</script>\n` + markup;
 }
 
 function getTransitiveDependencies(
@@ -60,15 +56,12 @@ function getTransitiveDependencies(
 
 export default function inlineSveltePlugin({
   tags = ["html", "svelte"],
-  fenceStart = "/* svelte:imports",
+  fenceStart = "/* svelte:definitions",
   fenceEnd = "*/",
-  globalsStart = "/* svelte:globals",
-  globalsEnd = "*/",
 }: InlineSvelteOptions = {}): Plugin {
   const tagGroup = tags.map(esc).join("|");
   const tplRE = new RegExp(`(?:${tagGroup})\\s*\`([\\s\\S]*?)\``, "g");
   const fenceRE = new RegExp(`${esc(fenceStart)}([\\s\\S]*?)${esc(fenceEnd)}`, "m");
-  const globalsRE = new RegExp(`${esc(globalsStart)}([\\s\\S]*?)${esc(globalsEnd)}`, "m");
   const globalDefRE = new RegExp(
     `^const\\s+([a-zA-Z0-9_$]+)\\s*=\\s*(?:${tagGroup})\\s*(\`[\\s\\S]*?\`)`,
     "gm"
@@ -89,8 +82,6 @@ export default function inlineSveltePlugin({
       const ms = new MagicString(code);
       let edited = false;
 
-      const imports = (fenceRE.exec(code)?.[1] ?? "").trim();
-
       let importsToAdd = "";
       let hoistedCode = "";
       const hashToLocal = new Map<string, string>();
@@ -99,20 +90,23 @@ export default function inlineSveltePlugin({
       const depGraph = new Map<string, Set<string>>();
       let allGlobalNames: string[] = [];
       let globalImportsForTpl = "";
+      let fenceContent = "";
 
-      /* 1. Process globals */
-      const globalsMatch = globalsRE.exec(code);
-      if (globalsMatch) {
+      /* 1. Process definitions fence */
+      const fenceMatch = fenceRE.exec(code);
+      if (fenceMatch) {
         edited = true;
-        const globalsContent = globalsMatch[1] ?? "";
-        ms.overwrite(globalsMatch.index, globalsMatch.index + globalsMatch[0].length, "");
+        fenceContent = fenceMatch[1] ?? "";
+        ms.overwrite(fenceMatch.index, fenceMatch.index + fenceMatch[0].length, "");
 
-        const componentMatches = [...globalsContent.matchAll(globalDefRE)];
+        const componentMatches = [...fenceContent.matchAll(globalDefRE)];
         componentMatches.forEach(match => globalComponentNames.add(match[1]));
+
+        const nonComponentCode = fenceContent.replace(globalDefRE, "").trim();
 
         const startOfDeclRegex = /^(?:const|let|var)\s+([a-zA-Z0-9_$]+)/gm;
         let declMatch;
-        while ((declMatch = startOfDeclRegex.exec(globalsContent)) !== null) {
+        while ((declMatch = startOfDeclRegex.exec(nonComponentCode)) !== null) {
           const varName = declMatch[1];
           if (globalComponentNames.has(varName)) continue;
 
@@ -121,8 +115,8 @@ export default function inlineSveltePlugin({
             bracketDepth = 0,
             parenDepth = 0,
             endIndex = -1;
-          for (let i = startIndex; i < globalsContent.length; i++) {
-            const char = globalsContent[i];
+          for (let i = startIndex; i < nonComponentCode.length; i++) {
+            const char = nonComponentCode[i];
             if (char === "{") braceDepth++;
             else if (char === "}") braceDepth--;
             else if (char === "[") bracketDepth++;
@@ -135,13 +129,17 @@ export default function inlineSveltePlugin({
             }
           }
           if (endIndex === -1) {
-            const nextNewline = globalsContent.indexOf("\n", startIndex);
-            endIndex = nextNewline !== -1 ? nextNewline : globalsContent.length;
+            const nextNewline = nonComponentCode.indexOf("\n", startIndex);
+            endIndex = nextNewline !== -1 ? nextNewline : nonComponentCode.length;
           }
-          const definition = globalsContent.substring(startIndex, endIndex).trim();
+          const definition = nonComponentCode.substring(startIndex, endIndex).trim();
           if (definition) globalVarDefs.set(varName, definition);
           startOfDeclRegex.lastIndex = endIndex;
         }
+
+        const importStatements =
+          nonComponentCode.match(/import[\s\S]*?from\s*['"].*?['"];?/g) || [];
+        hoistedCode += importStatements.join("\n") + "\n";
 
         allGlobalNames = [...globalComponentNames, ...globalVarDefs.keys()];
         const nameToMarkup = new Map(componentMatches.map(m => [m[1], m[2].slice(1, -1)]));
@@ -167,12 +165,9 @@ export default function inlineSveltePlugin({
         });
 
         const componentInfo = new Map<string, { local: string; virt: string }>();
-        const replacements = [];
 
         for (const compName of sortedComponentNames) {
-          const match = componentMatches.find(m => m[1] === compName)!;
-          const [, , templateLiteralWithTicks] = match;
-          const rawMarkup = templateLiteralWithTicks.slice(1, -1);
+          const rawMarkup = nameToMarkup.get(compName)!;
 
           const allDeps = getTransitiveDependencies(new Set([compName]), depGraph);
           allDeps.delete(compName);
@@ -191,35 +186,32 @@ export default function inlineSveltePlugin({
             }
           }
 
-          const markupWithDeps = applyImports(rawMarkup, scriptToInject);
-          const markup = applyImports(markupWithDeps, imports);
-          const hash = createHash("sha1").update(markup).digest("hex").slice(0, 8);
+          const importCode = importStatements.join("\n");
+          const markupWithImports = applySharedCode(rawMarkup, importCode);
+          const markupWithDeps = applySharedCode(markupWithImports, scriptToInject);
+          const hash = createHash("sha1").update(markupWithDeps).digest("hex").slice(0, 8);
 
           let local = hashToLocal.get(hash);
           const virt = `${VIRT}${hash}.js`;
           if (!local) {
             local = `Inline_${hash}`;
             hashToLocal.set(hash, local);
-            if (!cache.has(virt)) cache.set(virt, markup);
+            if (!cache.has(virt)) cache.set(virt, markupWithDeps);
             const ns = `__InlineNS_${hash}`;
             importsToAdd += `import * as ${ns} from '${virt}';\nconst ${local}=Object.assign(${ns}.default, ${ns});\n`;
           }
 
           componentInfo.set(compName, { local, virt });
           globalImportsForTpl += `import ${compName} from '${virt}';\n`;
-          replacements.push({
-            start: match.index,
-            end: match.index + match[0].length,
-            newText: `const ${compName} = ${local};`,
-          });
+          hoistedCode += `const ${compName} = ${local};\n`;
         }
 
-        let tempHoistedCode = globalsContent;
-        for (const rep of replacements.reverse()) {
-          tempHoistedCode =
-            tempHoistedCode.slice(0, rep.start) + rep.newText + tempHoistedCode.slice(rep.end);
-        }
-        hoistedCode = tempHoistedCode;
+        let tempFenceCode = fenceContent;
+        componentMatches.forEach(match => {
+          tempFenceCode = tempFenceCode.replace(match[0], "");
+        });
+
+        hoistedCode += tempFenceCode.replace(/import[\s\S]*?from\s*['"].*?['"];?/g, "").trim();
       }
 
       /* 2. Process all regular templates */
@@ -227,9 +219,9 @@ export default function inlineSveltePlugin({
       tplRE.lastIndex = 0;
       while ((m = tplRE.exec(code))) {
         if (
-          globalsMatch &&
-          m.index >= globalsMatch.index &&
-          m.index < globalsMatch.index + globalsMatch[0].length
+          fenceMatch &&
+          m.index >= fenceMatch.index &&
+          m.index < fenceMatch.index + fenceMatch[0].length
         )
           continue;
 
@@ -257,16 +249,19 @@ export default function inlineSveltePlugin({
           if (definition) scriptToInject += `\n${definition}`;
         }
 
-        const markupWithGlobals = applyImports(rawMarkup, scriptToInject);
-        const markup = applyImports(markupWithGlobals, imports);
-        const hash = createHash("sha1").update(markup).digest("hex").slice(0, 8);
+        const fenceImports = (fenceContent.match(/import[\s\S]*?from\s*['"].*?['"];?/g) || []).join(
+          "\n"
+        );
+        const markupWithFenceCode = applySharedCode(rawMarkup, fenceImports);
+        const markupWithGlobals = applySharedCode(markupWithFenceCode, scriptToInject);
+        const hash = createHash("sha1").update(markupWithGlobals).digest("hex").slice(0, 8);
 
         let local = hashToLocal.get(hash);
         if (!local) {
           local = `Inline_${hash}`;
           hashToLocal.set(hash, local);
           const virt = `${VIRT}${hash}.js`;
-          if (!cache.has(virt)) cache.set(virt, markup);
+          if (!cache.has(virt)) cache.set(virt, markupWithGlobals);
           const ns = `__InlineNS_${hash}`;
           importsToAdd += `import * as ${ns} from '${virt}';\nconst ${local}=Object.assign(${ns}.default, ${ns});\n`;
         }

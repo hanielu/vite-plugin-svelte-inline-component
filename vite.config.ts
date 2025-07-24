@@ -7,8 +7,8 @@ export default defineConfig(({ mode }) => {
     plugins: [
       mode === "test" &&
         inlineSveltePlugin({
-          globalsStart: "// svelte:globals",
-          globalsEnd: "// sg",
+          fenceStart: "// svelte:defs",
+          fenceEnd: "// sd",
         }),
       sveltekit(),
     ],
