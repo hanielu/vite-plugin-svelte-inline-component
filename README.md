@@ -69,7 +69,7 @@ To share code across multiple inline components in the same file, wrap your ES i
   const sharedClass = "text-red-500";
 
   // This component is also globally available
-  const GlobalButton = html`<button on:click>Click Me!</button>`;
+  const GlobalButton = html`<button>Click Me!</button>`;
 */
 
 const Thing1 = html`
