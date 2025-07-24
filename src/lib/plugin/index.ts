@@ -66,6 +66,7 @@ export default function inlineSveltePlugin({
     `^const\\s+([a-zA-Z0-9_$]+)\\s*=\\s*(?:${tagGroup})\\s*(\`[\\s\\S]*?\`)`,
     "gm"
   );
+  const moduleScriptExportRE = /<script\s+module\s*>[^<]*\bexport\b/;
 
   const VIRT = "virtual:inline-svelte/";
   const RSLV = "\0" + VIRT;
@@ -197,8 +198,14 @@ export default function inlineSveltePlugin({
             local = `Inline_${hash}`;
             hashToLocal.set(hash, local);
             if (!cache.has(virt)) cache.set(virt, markupWithDeps);
-            const ns = `__InlineNS_${hash}`;
-            importsToAdd += `import * as ${ns} from '${virt}';\nconst ${local}=Object.assign(${ns}.default, ${ns});\n`;
+
+            const hasModuleExports = moduleScriptExportRE.test(rawMarkup);
+            if (hasModuleExports) {
+              const ns = `__InlineNS_${hash}`;
+              importsToAdd += `import * as ${ns} from '${virt}';\nconst ${local}=Object.assign(${ns}.default, ${ns});\n`;
+            } else {
+              importsToAdd += `import ${local} from '${virt}';\n`;
+            }
           }
 
           componentInfo.set(compName, { local, virt });
@@ -262,8 +269,14 @@ export default function inlineSveltePlugin({
           hashToLocal.set(hash, local);
           const virt = `${VIRT}${hash}.js`;
           if (!cache.has(virt)) cache.set(virt, markupWithGlobals);
-          const ns = `__InlineNS_${hash}`;
-          importsToAdd += `import * as ${ns} from '${virt}';\nconst ${local}=Object.assign(${ns}.default, ${ns});\n`;
+
+          const hasModuleExports = moduleScriptExportRE.test(rawMarkup);
+          if (hasModuleExports) {
+            const ns = `__InlineNS_${hash}`;
+            importsToAdd += `import * as ${ns} from '${virt}';\nconst ${local}=Object.assign(${ns}.default, ${ns});\n`;
+          } else {
+            importsToAdd += `import ${local} from '${virt}';\n`;
+          }
         }
 
         ms.overwrite(m.index, tplRE.lastIndex, local);
