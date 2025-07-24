@@ -69,7 +69,6 @@ export default function inlineSveltePlugin({
   const tplRE = new RegExp(`(?:${tagGroup})\\s*\`([\\s\\S]*?)\``, "g");
   const fenceRE = new RegExp(`${esc(fenceStart)}([\\s\\S]*?)${esc(fenceEnd)}`, "m");
   const globalsRE = new RegExp(`${esc(globalsStart)}([\\s\\S]*?)${esc(globalsEnd)}`, "m");
-  // FIX: New, safer regex anchored to the start of a line.
   const globalDefRE = new RegExp(
     `^const\\s+([a-zA-Z0-9_$]+)\\s*=\\s*(?:${tagGroup})\\s*(\`[\\s\\S]*?\`)`,
     "gm"
@@ -78,6 +77,7 @@ export default function inlineSveltePlugin({
   const VIRT = "virtual:inline-svelte/";
   const RSLV = "\0" + VIRT;
 
+  /** virtualId → full markup (with injected imports) */
   const cache = new Map<string, string>();
 
   return {
@@ -107,7 +107,6 @@ export default function inlineSveltePlugin({
         ms.overwrite(globalsMatch.index, globalsMatch.index + globalsMatch[0].length, "");
         hoistedCode = globalsContent;
 
-        // FIX: Refactored component processing to use a more stable while/exec loop.
         const replacements = [];
         let match;
         globalDefRE.lastIndex = 0;
@@ -137,7 +136,6 @@ export default function inlineSveltePlugin({
           });
         }
 
-        // Apply replacements from end to start to avoid index shifting
         for (const rep of replacements.reverse()) {
           hoistedCode = hoistedCode.slice(0, rep.start) + rep.newText + hoistedCode.slice(rep.end);
         }
@@ -210,7 +208,13 @@ export default function inlineSveltePlugin({
 
         for (const name of sortedDeps) {
           if (globalComponentNames.has(name)) continue;
-          if (existingScriptContent.includes(name)) continue;
+
+          // FIX: A more precise regex to check for actual declarations, not just usage.
+          const isDeclaredInScript = new RegExp(
+            `\\b(let|const|var)\\s+([^=;]*?)\\b${name}\\b`
+          ).test(existingScriptContent);
+          if (isDeclaredInScript) continue;
+
           const definition = globalVarDefs.get(name);
           if (definition) scriptToInject += `\n${definition}`;
         }
