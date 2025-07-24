@@ -211,4 +211,21 @@ describe("Inline Svelte Components with sv", () => {
       </div>
     `);
   });
+
+  it("allows local state take precendence", () => {
+    const Counter = html`
+      <script>
+        let count = $state(100);
+      </script>
+      <p>Count: {count}</p>
+    `;
+
+    const renderer = render(Counter);
+
+    expect(renderer.container.firstElementChild).toMatchInlineSnapshot(`
+      <p>
+        Count: 100
+      </p>
+    `);
+  });
 });
