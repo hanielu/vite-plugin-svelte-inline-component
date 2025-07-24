@@ -47,8 +47,9 @@ export default function inlineSveltePlugin({
   const tplRE = new RegExp(`(?:${tagGroup})\\s*\`([\\s\\S]*?)\``, "g");
   const fenceRE = new RegExp(`${esc(fenceStart)}([\\s\\S]*?)${esc(fenceEnd)}`, "m");
   const globalsRE = new RegExp(`${esc(globalsStart)}([\\s\\S]*?)${esc(globalsEnd)}`, "m");
+  // FIX: Simplified the regex to remove a problematic negative lookahead that was preventing multiple matches.
   const globalDefWithTplRE = new RegExp(
-    `(const\\s+([a-zA-Z0-9_$]+)\\s*=\\s*)((?:${tagGroup})\\s*\`[\\s\\S]*?\`(?![^]*\`))`,
+    `(const\\s+([a-zA-Z0-9_$]+)\\s*=\\s*)((?:${tagGroup})\\s*\`[\\s\\S]*?\`)`,
     "g"
   );
 
@@ -84,11 +85,12 @@ export default function inlineSveltePlugin({
         const globalsContent = globalsMatch[1] ?? "";
         ms.overwrite(globalsMatch.index, globalsMatch.index + globalsMatch[0].length, "");
 
+        globalDefWithTplRE.lastIndex = 0;
+
         hoistedCode = globalsContent.replace(
           globalDefWithTplRE,
           (match, declaration: string, compName: string, templateLiteral: string) => {
-            globalComponentNames.add(compName); // Track component names
-            // @ts-expect-error - templateLiteral is not typed
+            globalComponentNames.add(compName);
             const rawMarkup = templateLiteral.match(/`([\s\S]*?)`/)[1];
             const markup = applyImports(rawMarkup, imports);
             const hash = createHash("sha1").update(markup).digest("hex").slice(0, 8);
@@ -136,12 +138,9 @@ export default function inlineSveltePlugin({
         let scriptToInject = globalImportsForTpl;
 
         for (const [name, definition] of globalVarDefs.entries()) {
-          // A. Don't inject `const Comp = ...` for components, the `import` is sufficient.
           if (globalComponentNames.has(name)) continue;
 
           const isUsedInTemplate = new RegExp(`\\b${name}\\b`).test(rawMarkup);
-          // B. Only inject if used in the template AND not already present in the component's own script.
-          // This gives the user full control to override or handle globals within their script.
           if (isUsedInTemplate && !existingScriptContent.includes(name)) {
             scriptToInject += `\n${definition}`;
           }

@@ -10,6 +10,7 @@ import { MemoryRouter, Routes, Route } from "@hvniel/svelte-router";
 
 // svelte:globals
 const Frank = html`<h1>Frank</h1>`;
+const James = html`<h1>James</h1>`;
 const count = $state(0);
 // sg
 
@@ -208,6 +209,23 @@ describe("Inline Svelte Components with sv", () => {
         </h1>
         <!---->
         0
+      </div>
+    `);
+  });
+
+  it("supports multiple global components", () => {
+    const renderer = render(html`<div><James name="John" /><James name="Jane" /></div>`);
+
+    expect(renderer.container.firstElementChild).toMatchInlineSnapshot(`
+      <div>
+        <h1>
+          James
+        </h1>
+        <!---->
+        <h1>
+          James
+        </h1>
+        <!---->
       </div>
     `);
   });
