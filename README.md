@@ -61,7 +61,7 @@ export default defineConfig(({ mode }) => ({
 
 To share code across multiple inline components in the same file, wrap your ES imports, variables, and "global" component definitions in a special comment block. The plugin will make everything inside this fence available to each inline component's script block.
 
-````tsx
+```tsx
 /* svelte:definitions
   import { tick } from "svelte";
 
@@ -118,7 +118,7 @@ const { header, footer } = ComponentWithSnippets as unknown as {
 const renderer = render(anchor => {
   header(anchor, () => "Welcome!");
 });
-````
+```
 
 ### Typing Named Exports
 
