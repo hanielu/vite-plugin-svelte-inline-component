@@ -8,6 +8,10 @@ import { page } from "@vitest/browser/context";
 import { MemoryRouter, Routes, Route } from "@hvniel/svelte-router";
 */
 
+/* svelte:globals
+const Frank = html`<h1>Frank</h1>`;
+*/
+
 describe("Inline Svelte Components with sv", () => {
   it("renders a simple component", () => {
     const SimpleComponent = html`<h1>Hello World</h1>`;
@@ -191,6 +195,20 @@ describe("Inline Svelte Components with sv", () => {
           Welcome!
         </h1>
       </header>
+    `);
+  });
+
+  it("supports global components", () => {
+    const Page = html`<div><Frank /></div>`;
+    const renderer = render(Page);
+
+    expect(renderer.container.firstElementChild).toMatchInlineSnapshot(`
+      <div>
+        <h1>
+          Frank
+        </h1>
+        <!---->
+      </div>
     `);
   });
 });

@@ -6,20 +6,19 @@
 
 ## 📖 Table of Contents
 
-- [✨ What it does](https://www.google.com/search?q=%23-what-it-does)
-- [🔧 Installation](https://www.google.com/search?q=%23-installation)
-- [🚀 Usage](https://www.google.com/search?q=%23-usage)
-  - [vite.config.ts / vite.config.js](https://www.google.com/search?q=%23viteconfigts--viteconfigjs)
-  - [Declaring the global tag helper](https://www.google.com/search?q=%23declaring-the-global-tag-helper)
-- [🧩 Named Exports & Snippets](https://www.google.com/search?q=%23-named-exports--snippets)
-  - [Typing Named Exports](https://www.google.com/search?q=%23typing-named-exports)
-- [🧪 Testing Inline & Reactive Components](https://www.google.com/search?q=%23-testing-inline--reactive-components)
-- [🚦 Import Fences](https://www.google.com/search?q=%23-import-fences)
-- [🛠️ API](https://www.google.com/search?q=%23-api)
-  - [`InlineSvelteOptions`](https://www.google.com/search?q=%23inlinesvelteoptions)
-- [🧐 How it works (nutshell)](https://www.google.com/search?q=%23-how-it-works-nutshell)
-- [⚠️ Caveats](https://www.google.com/search?q=%23-caveats)
-- [📝 License](https://www.google.com/search?q=%23-license)
+- [✨ What it does](#-what-it-does)
+- [🔧 Installation](#-installation)
+- [🚀 Usage](#-usage)
+  - [vite.config.ts / vite.config.js](#viteconfigts--viteconfigjs)
+- [🌍 Global Components](#-global-components)
+- [🚦 Import Fences](#-import-fences)
+- [🧩 Named Exports & Snippets](#-named-exports--snippets)
+- [🧪 Testing Inline & Reactive Components](#-testing-inline--reactive-components)
+- [🛠️ API](#️-api)
+  - [`InlineSvelteOptions`](#inlinesvelteoptions)
+- [🧐 How it works (nutshell)](#-how-it-works-nutshell)
+- [⚠️ Caveats](#️-caveats)
+- [📝 License](#-license)
 
 ---
 
@@ -56,6 +55,27 @@ export default defineConfig(({ mode }) => ({
 
 > **Why conditionally enable?**
 > In a typical SvelteKit project you already compile `.svelte` files. Turning the plugin on just for unit tests keeps production builds untouched while giving Vitest access to inline components.
+
+---
+
+## 🌍 Global Components
+
+You can define components inside a special `/* svelte:globals */` fence to make them automatically available to all other inline components in the same file. This is perfect for defining shared UI elements or mocks without manual imports.
+
+```typescript
+/* svelte:globals
+  // Any component defined here is "global" to this file.
+  const GlobalButton = html`<button on:click>Click Me!</button>`;
+*/
+
+// ✅ GlobalButton is now available here automatically.
+const Page = html`
+  <section>
+    <p>Welcome to the page.</p>
+    <GlobalButton />
+  </section>
+`;
+```
 
 ---
 
@@ -181,29 +201,29 @@ const Thing1 = html`
 
 ## 🛠️ API
 
-```ts
-inlineSveltePlugin(options?: InlineSvelteOptions): Plugin;
-```
+`inlineSveltePlugin(options?: InlineSvelteOptions): Plugin;`
 
 ### `InlineSvelteOptions`
 
-| option       | type       | default              | description                                                            |
-| :----------- | :--------- | :------------------- | :--------------------------------------------------------------------- |
-| `tags`       | `string[]` | `["html", "svelte"]` | Names of template‑tags that should be treated as inline Svelte markup. |
-| `fenceStart` | `string`   | `/* svelte:imports`  | The comment that _starts_ an import fence.                             |
-| `fenceEnd`   | `string`   | `*/`                 | The comment that _ends_ an import fence.                               |
+| option              | type       | default              | description                                        |
+| :------------------ | :--------- | :------------------- | :------------------------------------------------- |
+| `tags`              | `string[]` | `["html", "svelte"]` | Tag names to be treated as inline Svelte markup.   |
+| `fenceStart`        | `string`   | `/* svelte:imports`  | The comment that starts a standard import fence.   |
+| `globalsFenceStart` | `string`   | `/* svelte:globals`  | The comment that starts a global components fence. |
+| `fenceEnd`          | `string`   | `*/`                 | The comment that ends any fence.                   |
 
 ---
 
 ## 🧐 How it works (nutshell)
 
-1.  **Scan** each user source file (`.js`, `.ts`, `.jsx`, `.tsx`).
-2.  **Match** template literals whose tag name is in `options.tags`.
-3.  **Hash** the template content (including any fenced imports) to create a stable virtual module ID.
-4.  **Replace** the literal with a variable that imports the virtual module. Named exports (like snippets) are merged onto the default component export using `Object.assign`.
-5.  **Compile** the markup with Svelte when Vite requests the virtual module ID.
+The plugin uses a multi-stage process to transform your code:
 
-The result behaves just like a normal Svelte component import, so SSR, hydration, and Hot Module Replacement work as expected.
+1.  **Scan for Fences:** The plugin first looks for `/* svelte:globals */` and `/* svelte:imports */` fences to identify shared components and imports.
+2.  **Process Globals:** It compiles any components found inside the `globals` fence.
+3.  **Process Locals:** It then compiles the remaining "local" components, injecting the standard imports and the compiled global components into each one's script scope.
+4.  **Replace Literals:** Finally, it replaces all the original `html\`...\`\` literals in your code with variables that point to the newly created virtual components.
+
+The result behaves just like a normal Svelte component import.
 
 ---
 
@@ -211,7 +231,7 @@ The result behaves just like a normal Svelte component import, so SSR, hydration
 
 - The plugin only transforms your application's source code, ignoring anything inside `node_modules`.
 - The template content must be valid Svelte component markup. Syntax errors will surface during compilation.
-- Because each inline component gets a unique hash, HMR will re‑render the whole component tree containing it. Keep inline components small for best performance.
+- Because each inline component gets a unique hash, HMR will re-render the whole component tree containing it. Keep inline components small for best performance.
 
 ---
 
