@@ -11,6 +11,7 @@ import { MemoryRouter, Routes, Route } from "@hvniel/svelte-router";
 // svelte:globals
 const Frank = html`<h1>Frank</h1>`;
 const James = html`<h1>James</h1>`;
+const James2 = html`<div><James /><Frank /></div>`;
 const count = $state(0);
 const dupes = [
   {
@@ -225,7 +226,7 @@ describe("Inline Svelte Components with sv", () => {
   });
 
   it("supports multiple global components", () => {
-    const renderer = render(html`<div><James name="John" /><James name="Jane" /></div>`);
+    const renderer = render(html`<div><James /><James /></div>`);
 
     expect(renderer.container.firstElementChild).toMatchInlineSnapshot(`
       <div>
@@ -265,6 +266,23 @@ describe("Inline Svelte Components with sv", () => {
       <div>
         <h1>
           James
+        </h1>
+        <!---->
+      </div>
+    `);
+  });
+
+  it("allows global components to reference other global components", () => {
+    const renderer = render(James2);
+
+    expect(renderer.container.firstElementChild).toMatchInlineSnapshot(`
+      <div>
+        <h1>
+          James
+        </h1>
+        <!---->
+        <h1>
+          Frank
         </h1>
         <!---->
       </div>

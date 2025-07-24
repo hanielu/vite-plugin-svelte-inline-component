@@ -77,7 +77,6 @@ export default function inlineSveltePlugin({
   const VIRT = "virtual:inline-svelte/";
   const RSLV = "\0" + VIRT;
 
-  /** virtualId → full markup (with injected imports) */
   const cache = new Map<string, string>();
 
   return {
@@ -93,11 +92,13 @@ export default function inlineSveltePlugin({
       const imports = (fenceRE.exec(code)?.[1] ?? "").trim();
 
       let importsToAdd = "";
-      let globalImportsForTpl = "";
       let hoistedCode = "";
-      const globalVarDefs = new Map<string, string>();
       const hashToLocal = new Map<string, string>();
       const globalComponentNames = new Set<string>();
+      const globalVarDefs = new Map<string, string>();
+      const depGraph = new Map<string, Set<string>>();
+      let allGlobalNames: string[] = [];
+      let globalImportsForTpl = "";
 
       /* 1. Process globals */
       const globalsMatch = globalsRE.exec(code);
@@ -105,52 +106,23 @@ export default function inlineSveltePlugin({
         edited = true;
         const globalsContent = globalsMatch[1] ?? "";
         ms.overwrite(globalsMatch.index, globalsMatch.index + globalsMatch[0].length, "");
-        hoistedCode = globalsContent;
 
-        const replacements = [];
-        let match;
-        globalDefRE.lastIndex = 0;
-        while ((match = globalDefRE.exec(globalsContent)) !== null) {
-          const [fullMatch, compName, templateLiteralWithTicks] = match;
-          globalComponentNames.add(compName);
-
-          const rawMarkup = templateLiteralWithTicks.slice(1, -1);
-          const markup = applyImports(rawMarkup, imports);
-          const hash = createHash("sha1").update(markup).digest("hex").slice(0, 8);
-
-          let local = hashToLocal.get(hash);
-          if (!local) {
-            local = `Inline_${hash}`;
-            hashToLocal.set(hash, local);
-            const virt = `${VIRT}${hash}.js`;
-            if (!cache.has(virt)) cache.set(virt, markup);
-            const ns = `__InlineNS_${hash}`;
-            importsToAdd += `import * as ${ns} from '${virt}';\nconst ${local}=Object.assign(${ns}.default, ${ns});\n`;
-            globalImportsForTpl += `import ${compName} from '${virt}';\n`;
-          }
-
-          replacements.push({
-            start: match.index,
-            end: match.index + fullMatch.length,
-            newText: `const ${compName} = ${local}`,
-          });
-        }
-
-        for (const rep of replacements.reverse()) {
-          hoistedCode = hoistedCode.slice(0, rep.start) + rep.newText + hoistedCode.slice(rep.end);
-        }
+        const componentMatches = [...globalsContent.matchAll(globalDefRE)];
+        componentMatches.forEach(match => globalComponentNames.add(match[1]));
 
         const startOfDeclRegex = /^(?:const|let|var)\s+([a-zA-Z0-9_$]+)/gm;
         let declMatch;
-        while ((declMatch = startOfDeclRegex.exec(hoistedCode)) !== null) {
+        while ((declMatch = startOfDeclRegex.exec(globalsContent)) !== null) {
           const varName = declMatch[1];
+          if (globalComponentNames.has(varName)) continue;
+
           const startIndex = declMatch.index;
           let braceDepth = 0,
             bracketDepth = 0,
             parenDepth = 0,
             endIndex = -1;
-          for (let i = startIndex; i < hoistedCode.length; i++) {
-            const char = hoistedCode[i];
+          for (let i = startIndex; i < globalsContent.length; i++) {
+            const char = globalsContent[i];
             if (char === "{") braceDepth++;
             else if (char === "}") braceDepth--;
             else if (char === "[") bracketDepth++;
@@ -163,24 +135,91 @@ export default function inlineSveltePlugin({
             }
           }
           if (endIndex === -1) {
-            const nextNewline = hoistedCode.indexOf("\n", startIndex);
-            endIndex = nextNewline !== -1 ? nextNewline : hoistedCode.length;
+            const nextNewline = globalsContent.indexOf("\n", startIndex);
+            endIndex = nextNewline !== -1 ? nextNewline : globalsContent.length;
           }
-          const definition = hoistedCode.substring(startIndex, endIndex).trim();
+          const definition = globalsContent.substring(startIndex, endIndex).trim();
           if (definition) globalVarDefs.set(varName, definition);
           startOfDeclRegex.lastIndex = endIndex;
         }
-      }
 
-      const depGraph = new Map<string, Set<string>>();
-      const allGlobalNames = [...globalVarDefs.keys()];
-      for (const [name, definition] of globalVarDefs.entries()) {
-        const dependencies = new Set<string>();
-        for (const depName of allGlobalNames) {
-          if (name === depName) continue;
-          if (new RegExp(`\\b${depName}\\b`).test(definition)) dependencies.add(depName);
+        allGlobalNames = [...globalComponentNames, ...globalVarDefs.keys()];
+        const nameToMarkup = new Map(componentMatches.map(m => [m[1], m[2].slice(1, -1)]));
+
+        for (const name of allGlobalNames) {
+          const dependencies = new Set<string>();
+          const content = globalComponentNames.has(name)
+            ? nameToMarkup.get(name)!
+            : globalVarDefs.get(name)!;
+          for (const depName of allGlobalNames) {
+            if (name === depName) continue;
+            if (new RegExp(`\\b${depName}\\b`).test(content)) dependencies.add(depName);
+          }
+          depGraph.set(name, dependencies);
         }
-        depGraph.set(name, dependencies);
+
+        const sortedComponentNames = [...globalComponentNames].sort((a, b) => {
+          const depsA = getTransitiveDependencies(new Set([a]), depGraph);
+          if (depsA.has(b)) return 1;
+          const depsB = getTransitiveDependencies(new Set([b]), depGraph);
+          if (depsB.has(a)) return -1;
+          return allGlobalNames.indexOf(a) - allGlobalNames.indexOf(b);
+        });
+
+        const componentInfo = new Map<string, { local: string; virt: string }>();
+        const replacements = [];
+
+        for (const compName of sortedComponentNames) {
+          const match = componentMatches.find(m => m[1] === compName)!;
+          const [, , templateLiteralWithTicks] = match;
+          const rawMarkup = templateLiteralWithTicks.slice(1, -1);
+
+          const allDeps = getTransitiveDependencies(new Set([compName]), depGraph);
+          allDeps.delete(compName);
+
+          let scriptToInject = "";
+          const sortedDeps = [...allDeps].sort(
+            (a, b) => allGlobalNames.indexOf(a) - allGlobalNames.indexOf(b)
+          );
+          for (const depName of sortedDeps) {
+            if (globalComponentNames.has(depName)) {
+              const info = componentInfo.get(depName);
+              if (info) scriptToInject += `import ${depName} from '${info.virt}';\n`;
+            } else {
+              const definition = globalVarDefs.get(depName);
+              if (definition) scriptToInject += `\n${definition}`;
+            }
+          }
+
+          const markupWithDeps = applyImports(rawMarkup, scriptToInject);
+          const markup = applyImports(markupWithDeps, imports);
+          const hash = createHash("sha1").update(markup).digest("hex").slice(0, 8);
+
+          let local = hashToLocal.get(hash);
+          const virt = `${VIRT}${hash}.js`;
+          if (!local) {
+            local = `Inline_${hash}`;
+            hashToLocal.set(hash, local);
+            if (!cache.has(virt)) cache.set(virt, markup);
+            const ns = `__InlineNS_${hash}`;
+            importsToAdd += `import * as ${ns} from '${virt}';\nconst ${local}=Object.assign(${ns}.default, ${ns});\n`;
+          }
+
+          componentInfo.set(compName, { local, virt });
+          globalImportsForTpl += `import ${compName} from '${virt}';\n`;
+          replacements.push({
+            start: match.index,
+            end: match.index + match[0].length,
+            newText: `const ${compName} = ${local};`,
+          });
+        }
+
+        let tempHoistedCode = globalsContent;
+        for (const rep of replacements.reverse()) {
+          tempHoistedCode =
+            tempHoistedCode.slice(0, rep.start) + rep.newText + tempHoistedCode.slice(rep.end);
+        }
+        hoistedCode = tempHoistedCode;
       }
 
       /* 2. Process all regular templates */
@@ -209,10 +248,9 @@ export default function inlineSveltePlugin({
         for (const name of sortedDeps) {
           if (globalComponentNames.has(name)) continue;
 
-          // FIX: A more precise regex to check for actual declarations, not just usage.
-          const isDeclaredInScript = new RegExp(
-            `\\b(let|const|var)\\s+([^=;]*?)\\b${name}\\b`
-          ).test(existingScriptContent);
+          const isDeclaredInScript = new RegExp(`\\b(let|const|var)\\s+[^=;]*?\\b${name}\\b`).test(
+            existingScriptContent
+          );
           if (isDeclaredInScript) continue;
 
           const definition = globalVarDefs.get(name);
