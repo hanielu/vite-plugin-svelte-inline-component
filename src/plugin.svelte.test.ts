@@ -12,6 +12,17 @@ import { MemoryRouter, Routes, Route } from "@hvniel/svelte-router";
 const Frank = html`<h1>Frank</h1>`;
 const James = html`<h1>James</h1>`;
 const count = $state(0);
+const dupes = [
+  {
+    name: "John",
+    comp: James,
+  },
+  {
+    name: "Jane",
+    comp: James,
+  },
+];
+const dupe = dupes[0];
 // sg
 
 describe("Inline Svelte Components with sv", () => {
@@ -244,6 +255,19 @@ describe("Inline Svelte Components with sv", () => {
       <p>
         Count: 100
       </p>
+    `);
+  });
+
+  it("allows global vars to reference global components", () => {
+    const renderer = render(html`<div><dupe.comp /></div>`);
+
+    expect(renderer.container.firstElementChild).toMatchInlineSnapshot(`
+      <div>
+        <h1>
+          James
+        </h1>
+        <!---->
+      </div>
     `);
   });
 });
