@@ -79,6 +79,7 @@ const Thing1 = html`
   <button class="{sharedClass}" onclick={() => n++}>Button: {n}</button>
   <GlobalButton />
 `;
+```
 
 ---
 
