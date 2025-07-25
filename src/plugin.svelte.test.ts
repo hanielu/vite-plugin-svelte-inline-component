@@ -26,12 +26,12 @@ const dupe = dupes[0];
 describe("Inline Svelte Components with sv", () => {
   it("renders a simple component", () => {
     const SimpleComponent = html`<h1>Hello World</h1>`;
-    const renderer = render(SimpleComponentParent, {
+    const screen = render(SimpleComponentParent, {
       children: SimpleComponent,
     });
 
     // <!----> is added in the test because that's what svelte does
-    expect(renderer.container.firstElementChild).toMatchInlineSnapshot(`
+    expect(screen.container.firstElementChild).toMatchInlineSnapshot(`
       <div
         class="plugin-svelte"
       >
@@ -52,9 +52,9 @@ describe("Inline Svelte Components with sv", () => {
       <h1>Hello {name}!</h1>
     `;
 
-    const renderer = render(ComponentWithProps, { name: "Svelte" });
+    const screen = render(ComponentWithProps, { name: "Svelte" });
 
-    expect(renderer.container.firstElementChild).toMatchInlineSnapshot(`
+    expect(screen.container.firstElementChild).toMatchInlineSnapshot(`
       <h1>
         Hello Svelte!
       </h1>
@@ -74,9 +74,9 @@ describe("Inline Svelte Components with sv", () => {
       <button onclick="{increment}">Count: {count}</button>
     `;
 
-    const renderer = render(ReactiveComponent);
+    const screen = render(ReactiveComponent);
 
-    const button = renderer.getByRole("button");
+    const button = screen.getByRole("button");
 
     expect(button).toHaveTextContent("Count: 0");
 
@@ -99,11 +99,11 @@ describe("Inline Svelte Components with sv", () => {
 
     const Content = html`<p>Content goes here</p>`;
 
-    const { getByLabelText } = render(Layout, {
+    const screen = render(Layout, {
       children: Content,
     });
 
-    const layout = getByLabelText("layout");
+    const layout = screen.getByLabelText("layout");
 
     expect(layout).toHaveTextContent("Header");
     expect(layout).toHaveTextContent("Content goes here");
@@ -127,12 +127,12 @@ describe("Inline Svelte Components with sv", () => {
       </MemoryRouter>
     `;
 
-    const renderer = render(App, {
+    const screen = render(App, {
       HomeComponent,
       AboutComponent,
     });
 
-    expect(renderer.container.firstElementChild).toMatchInlineSnapshot(`
+    expect(screen.container.firstElementChild).toMatchInlineSnapshot(`
       <h1>
         Home Page
       </h1>
@@ -142,11 +142,11 @@ describe("Inline Svelte Components with sv", () => {
   it("allows duplicate components", () => {
     const Component2 = html`<h1>Hello World</h1>`;
 
-    const renderer = render(html`<h1>Hello World</h1>`, {
+    const screen = render(html`<h1>Hello World</h1>`, {
       children: Component2,
     });
 
-    expect(renderer.container.firstElementChild).toMatchInlineSnapshot(`
+    expect(screen.container.firstElementChild).toMatchInlineSnapshot(`
       <h1>
         Hello World
       </h1>
@@ -194,11 +194,11 @@ describe("Inline Svelte Components with sv", () => {
       header: InlineSnippet<string>;
     };
 
-    const renderer = render(anchor => {
+    const screen = render(anchor => {
       header(anchor, () => "Welcome!");
     });
 
-    expect(renderer.container.firstElementChild).toMatchInlineSnapshot(`
+    expect(screen.container.firstElementChild).toMatchInlineSnapshot(`
       <header>
         <h1>
           Welcome!
@@ -208,9 +208,9 @@ describe("Inline Svelte Components with sv", () => {
   });
 
   it("supports global components", () => {
-    const renderer = render(html`<div><Frank />{count}</div>`);
+    const screen = render(html`<div><Frank />{count}</div>`);
 
-    expect(renderer.container.firstElementChild).toMatchInlineSnapshot(`
+    expect(screen.container.firstElementChild).toMatchInlineSnapshot(`
       <div>
         <h1>
           Frank
@@ -222,9 +222,9 @@ describe("Inline Svelte Components with sv", () => {
   });
 
   it("supports multiple global components", () => {
-    const renderer = render(html`<div><James /><James /></div>`);
+    const screen = render(html`<div><James /><James /></div>`);
 
-    expect(renderer.container.firstElementChild).toMatchInlineSnapshot(`
+    expect(screen.container.firstElementChild).toMatchInlineSnapshot(`
       <div>
         <h1>
           James
@@ -246,9 +246,9 @@ describe("Inline Svelte Components with sv", () => {
       <p>Count: {count}</p>
     `;
 
-    const renderer = render(Counter);
+    const screen = render(Counter);
 
-    expect(renderer.container.firstElementChild).toMatchInlineSnapshot(`
+    expect(screen.container.firstElementChild).toMatchInlineSnapshot(`
       <p>
         Count: 100
       </p>
@@ -256,9 +256,9 @@ describe("Inline Svelte Components with sv", () => {
   });
 
   it("allows global vars to reference global components", () => {
-    const renderer = render(html`<div><dupe.comp /></div>`);
+    const screen = render(html`<div><dupe.comp /></div>`);
 
-    expect(renderer.container.firstElementChild).toMatchInlineSnapshot(`
+    expect(screen.container.firstElementChild).toMatchInlineSnapshot(`
       <div>
         <h1>
           James
@@ -269,9 +269,9 @@ describe("Inline Svelte Components with sv", () => {
   });
 
   it("allows global components to reference other global components", () => {
-    const renderer = render(James2);
+    const screen = render(James2);
 
-    expect(renderer.container.firstElementChild).toMatchInlineSnapshot(`
+    expect(screen.container.firstElementChild).toMatchInlineSnapshot(`
       <div>
         <h1>
           James
