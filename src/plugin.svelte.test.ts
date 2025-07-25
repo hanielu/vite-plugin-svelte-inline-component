@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import { render } from "vitest-browser-svelte";
 import SimpleComponentParent from "./plugin.svelte";
 import { html, type InlineSnippet } from "inline";
-import { page } from "@vitest/browser/context";
 
 // svelte:defs
 import { MemoryRouter, Routes, Route } from "@hvniel/svelte-router";
@@ -82,8 +81,7 @@ describe("Inline Svelte Components with sv", () => {
     expect(button).toHaveTextContent("Count: 0");
 
     await button.click();
-
-    expect(button).toHaveTextContent("Count: 1");
+    await expect.element(button).toHaveTextContent("Count: 1");
   });
 
   it("supports component with children", () => {
