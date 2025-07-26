@@ -201,10 +201,9 @@ it("supports reactive components", async () => {
 
 The plugin uses a multi-stage process to transform your code:
 
-1.  **Scan for Fences:** The plugin first looks for `/* svelte:globals */` and `/* svelte:imports */` fences to identify shared components and imports.
-2.  **Process Globals:** It compiles any components found inside the `globals` fence.
-3.  **Process Locals:** It then compiles the remaining "local" components, injecting the standard imports and the compiled global components into each one's script scope.
-4.  **Replace Literals:** Finally, it replaces all the original `html\`...\`\` literals in your code with variables that point to the newly created virtual components.
+1.  **Scan for a Definitions Fence:** The plugin first looks for a `/* svelte:definitions */` fence to identify any shared code (imports, variables, and components).
+2.  **Process Templates:** It then compiles all "local" and "global" inline components, injecting any shared code from the definitions fence into each component's script scope.
+3.  **Replace Literals:** Finally, it replaces all the original `html\`...\`\` literals in your code with variables that point to the newly created virtual components.
 
 The result behaves just like a normal Svelte component import.
 
