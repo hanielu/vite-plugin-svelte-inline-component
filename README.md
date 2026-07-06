@@ -83,6 +83,27 @@ const Thing1 = html`
 
 ---
 
+## 🔗 Local Scoping with `scope(...)`
+
+Inline components defined with `const X = html\`...\`` are not automatically visible to other inline components. To use one inside another, pass it to `scope(...)` right before the tag:
+
+```tsx
+import { html, scope } from "@hvniel/vite-plugin-svelte-inline-component";
+
+const ComponentA = html`<h1>A</h1>`;
+
+// ComponentA is now in scope for ComponentB
+const ComponentB = scope(ComponentA).html`<div><ComponentA /></div>`;
+```
+
+Notes:
+
+- The tag (`html`) must come **immediately before** the backtick — this keeps syntax highlighting from extensions like `lit-html` working.
+- Components passed to `scope(...)` take precedence over fence globals with the same name.
+- A component can only be scoped after it has been defined earlier in the file.
+
+---
+
 ## 🧩 Named Exports & Snippets
 
 Just like regular Svelte files, you can use `<script context="module">` (or `<script module>`) to export values from an inline component. This is especially useful for **Svelte 5 snippets**.
