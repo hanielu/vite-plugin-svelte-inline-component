@@ -207,6 +207,26 @@ describe("Inline Svelte Components with sv", () => {
     `);
   });
 
+  it("allows relative imports inside the component definition", () => {
+    const ComponentWithImport = html`
+      <script>
+        import Parent from "./plugin.svelte";
+      </script>
+
+      <Parent />
+    `;
+
+    const screen = render(ComponentWithImport);
+
+    expect(screen.container.firstElementChild).toMatchInlineSnapshot(`
+      <div
+        class="plugin-svelte"
+      >
+        <!---->
+      </div>
+    `);
+  });
+
   it("supports global components", () => {
     const screen = render(html`<div><Frank />{count}</div>`);
 

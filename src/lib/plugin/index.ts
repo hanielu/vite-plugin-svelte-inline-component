@@ -1,5 +1,6 @@
 import { compile } from "svelte/compiler";
 import { createHash } from "crypto";
+import { dirname, resolve, sep } from "path";
 import MagicString from "magic-string";
 import type { Plugin } from "vite";
 
@@ -28,6 +29,19 @@ function applySharedCode(markup: string, code: string): string {
     return markup.slice(0, idx) + "\n" + code + "\n" + markup.slice(idx);
   }
   return `<script>\n${code}\n</script>\n` + markup;
+}
+
+const relativeImportSpecifierRE = /((?:^|\s)(?:import|from)\s*)(['"])(\.\.?\/[^'"]+)\2/gm;
+
+/** Rewrite relative import specifiers in generated markup to absolute paths, resolved
+ *  against the directory of the file the macro was used in, so they still resolve once
+ *  the markup is compiled as a standalone virtual module. */
+function resolveRelativeImports(markup: string, sourceId: string): string {
+  const sourceDir = dirname(sourceId);
+  return markup.replace(relativeImportSpecifierRE, (_full, prefix, quote, specifier) => {
+    const absolute = resolve(sourceDir, specifier).split(sep).join("/");
+    return `${prefix}${quote}${absolute}${quote}`;
+  });
 }
 
 function getTransitiveDependencies(
@@ -190,14 +204,15 @@ export default function inlineSveltePlugin({
           const importCode = importStatements.join("\n");
           const markupWithImports = applySharedCode(rawMarkup, importCode);
           const markupWithDeps = applySharedCode(markupWithImports, scriptToInject);
-          const hash = createHash("sha1").update(markupWithDeps).digest("hex").slice(0, 8);
+          const markupWithResolvedImports = resolveRelativeImports(markupWithDeps, id);
+          const hash = createHash("sha1").update(markupWithResolvedImports).digest("hex").slice(0, 8);
 
           let local = hashToLocal.get(hash);
           const virt = `${VIRT}${hash}.js`;
           if (!local) {
             local = `Inline_${hash}`;
             hashToLocal.set(hash, local);
-            if (!cache.has(virt)) cache.set(virt, markupWithDeps);
+            if (!cache.has(virt)) cache.set(virt, markupWithResolvedImports);
 
             const hasModuleExports = moduleScriptExportRE.test(rawMarkup);
             if (hasModuleExports) {
@@ -261,14 +276,15 @@ export default function inlineSveltePlugin({
         );
         const markupWithFenceCode = applySharedCode(rawMarkup, fenceImports);
         const markupWithGlobals = applySharedCode(markupWithFenceCode, scriptToInject);
-        const hash = createHash("sha1").update(markupWithGlobals).digest("hex").slice(0, 8);
+        const markupWithResolvedImports = resolveRelativeImports(markupWithGlobals, id);
+        const hash = createHash("sha1").update(markupWithResolvedImports).digest("hex").slice(0, 8);
 
         let local = hashToLocal.get(hash);
         if (!local) {
           local = `Inline_${hash}`;
           hashToLocal.set(hash, local);
           const virt = `${VIRT}${hash}.js`;
-          if (!cache.has(virt)) cache.set(virt, markupWithGlobals);
+          if (!cache.has(virt)) cache.set(virt, markupWithResolvedImports);
 
           const hasModuleExports = moduleScriptExportRE.test(rawMarkup);
           if (hasModuleExports) {
