@@ -44,7 +44,7 @@
     "svelte": "^5.0.0"
   },
   "devDependencies": {
-    "@hvniel/svelte-router": "^0.0.1",
+    "@hvniel/svelte-router": "^0.0.4",
     "@sveltejs/adapter-auto": "^6.0.0",
     "@sveltejs/kit": "^2.22.0",
     "@sveltejs/package": "^2.0.0",

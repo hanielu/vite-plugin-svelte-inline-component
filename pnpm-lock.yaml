@@ -13,8 +13,8 @@ importers:
         version: 0.30.17
     devDependencies:
       '@hvniel/svelte-router':
-        specifier: ^0.0.1
-        version: 0.0.1(svelte@5.36.13)
+        specifier: ^0.0.4
+        version: 0.0.4(svelte@5.36.13)
       '@sveltejs/adapter-auto':
         specifier: ^6.0.0
         version: 6.0.1(@sveltejs/kit@2.25.1(@sveltejs/vite-plugin-svelte@6.1.0(svelte@5.36.13)(vite@7.0.5(@types/node@24.1.0)))(svelte@5.36.13)(vite@7.0.5(@types/node@24.1.0)))
@@ -232,8 +232,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@hvniel/svelte-router@0.0.1':
-    resolution: {integrity: sha512-ESi9b5NiycaTneVdbCpQ8ZGhG5p7ZD4YscM+5a7Hk9kQK68Y4p9LyjaEffEXpxV7DJAN8qbtso48armiKm0pqg==}
+  '@hvniel/svelte-router@0.0.4':
+    resolution: {integrity: sha512-qE9Tnmq+1olKM5roYKrUCWiew/hYp4B2GGqSAZHKItOsLHXr5GjNGpQDV65ahgJrYHiTbaGLH4CkTkjDjPnV1w==}
     peerDependencies:
       svelte: ^5.0.0
 
@@ -1008,7 +1008,7 @@ snapshots:
   '@esbuild/win32-x64@0.25.8':
     optional: true
 
-  '@hvniel/svelte-router@0.0.1(svelte@5.36.13)':
+  '@hvniel/svelte-router@0.0.4(svelte@5.36.13)':
     dependencies:
       svelte: 5.36.13
 
