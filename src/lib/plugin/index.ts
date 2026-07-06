@@ -74,13 +74,22 @@ export default function inlineSveltePlugin({
   fenceEnd = "*/",
 }: InlineSvelteOptions = {}): Plugin {
   const tagGroup = tags.map(esc).join("|");
-  const tplRE = new RegExp(`(?:${tagGroup})\\s*\`([\\s\\S]*?)\``, "g");
+  // Optionally preceded by `scope(...).` — the tag must stay directly before the
+  // backtick so editor extensions (e.g. lit-html) keep highlighting the markup.
+  const tplRE = new RegExp(
+    `(?:scope\\s*\\(([^)]*)\\)\\s*\\.\\s*)?(?:${tagGroup})\\s*\`([\\s\\S]*?)\``,
+    "g"
+  );
   const fenceRE = new RegExp(`${esc(fenceStart)}([\\s\\S]*?)${esc(fenceEnd)}`, "m");
   const globalDefRE = new RegExp(
-    `^const\\s+([a-zA-Z0-9_$]+)\\s*=\\s*(?:${tagGroup})\\s*(\`[\\s\\S]*?\`)`,
+    `^const\\s+([a-zA-Z0-9_$]+)\\s*=\\s*(?:scope\\s*\\([^)]*\\)\\s*\\.\\s*)?(?:${tagGroup})\\s*(\`[\\s\\S]*?\`)`,
     "gm"
   );
   const moduleScriptExportRE = /<script\s+module\s*>[^<]*\bexport\b/;
+  const assignedNameRE = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*$/;
+
+  const isDeclaredInScript = (name: string, scriptContent: string) =>
+    new RegExp(`\\b(?:let|const|var)\\s+[^=;]*?\\b${esc(name)}\\b`).test(scriptContent);
 
   const VIRT = "virtual:inline-svelte/";
   const RSLV = "\0" + VIRT;
@@ -104,8 +113,12 @@ export default function inlineSveltePlugin({
       const globalVarDefs = new Map<string, string>();
       const depGraph = new Map<string, Set<string>>();
       let allGlobalNames: string[] = [];
-      let globalImportsForTpl = "";
       let fenceContent = "";
+      let fenceImports = "";
+      /** fence component name -> its virtual module */
+      const componentInfo = new Map<string, { local: string; virt: string }>();
+      /** local (non-fence) inline component name -> its virtual module */
+      const localComponents = new Map<string, string>();
 
       /* 1. Process definitions fence */
       const fenceMatch = fenceRE.exec(code);
@@ -154,7 +167,8 @@ export default function inlineSveltePlugin({
 
         const importStatements =
           nonComponentCode.match(/import[\s\S]*?from\s*['"].*?['"];?/g) || [];
-        hoistedCode += importStatements.join("\n") + "\n";
+        fenceImports = importStatements.join("\n");
+        hoistedCode += fenceImports + "\n";
 
         allGlobalNames = [...globalComponentNames, ...globalVarDefs.keys()];
         const nameToMarkup = new Map(componentMatches.map(m => [m[1], m[2].slice(1, -1)]));
@@ -178,8 +192,6 @@ export default function inlineSveltePlugin({
           if (depsB.has(a)) return -1;
           return allGlobalNames.indexOf(a) - allGlobalNames.indexOf(b);
         });
-
-        const componentInfo = new Map<string, { local: string; virt: string }>();
 
         for (const compName of sortedComponentNames) {
           const rawMarkup = nameToMarkup.get(compName)!;
@@ -224,7 +236,6 @@ export default function inlineSveltePlugin({
           }
 
           componentInfo.set(compName, { local, virt });
-          globalImportsForTpl += `import ${compName} from '${virt}';\n`;
           hoistedCode += `const ${compName} = ${local};\n`;
         }
 
@@ -247,43 +258,65 @@ export default function inlineSveltePlugin({
         )
           continue;
 
-        const rawMarkup = m[1];
+        const scopeArgs = (m[1] ?? "")
+          .split(",")
+          .map(s => s.trim())
+          .filter(Boolean);
+        const rawMarkup = m[2];
+        const assignedName = assignedNameRE.exec(code.slice(0, m.index))?.[1];
+        const existingScriptContent = rawMarkup.match(/<script.*?>([\s\S]*?)<\/script>/)?.[1] ?? "";
+
+        let scriptToInject = "";
+        const injectedNames = new Set<string>();
+
+        /* scope(...) deps — local inline components shadow fence globals */
+        for (const dep of scopeArgs) {
+          if (injectedNames.has(dep) || isDeclaredInScript(dep, existingScriptContent)) continue;
+          const virt = localComponents.get(dep) ?? componentInfo.get(dep)?.virt;
+          if (virt) {
+            scriptToInject += `import ${dep} from '${virt}';\n`;
+            injectedNames.add(dep);
+          }
+        }
+
+        /* fence globals referenced in the markup, resolved transitively */
         const directDeps = new Set<string>();
         for (const name of allGlobalNames) {
           if (new RegExp(`\\b${name}\\b`).test(rawMarkup)) directDeps.add(name);
         }
         const allDeps = getTransitiveDependencies(directDeps, depGraph);
-        let scriptToInject = globalImportsForTpl;
-        const existingScriptContent = rawMarkup.match(/<script.*?>([\s\S]*?)<\/script>/)?.[1] ?? "";
         const sortedDeps = [...allDeps].sort(
           (a, b) => allGlobalNames.indexOf(a) - allGlobalNames.indexOf(b)
         );
 
         for (const name of sortedDeps) {
-          if (globalComponentNames.has(name)) continue;
+          if (injectedNames.has(name) || isDeclaredInScript(name, existingScriptContent)) continue;
 
-          const isDeclaredInScript = new RegExp(`\\b(let|const|var)\\s+[^=;]*?\\b${name}\\b`).test(
-            existingScriptContent
-          );
-          if (isDeclaredInScript) continue;
-
-          const definition = globalVarDefs.get(name);
-          if (definition) scriptToInject += `\n${definition}`;
+          if (globalComponentNames.has(name)) {
+            const info = componentInfo.get(name);
+            if (info) {
+              scriptToInject += `import ${name} from '${info.virt}';\n`;
+              injectedNames.add(name);
+            }
+          } else {
+            const definition = globalVarDefs.get(name);
+            if (definition) {
+              scriptToInject += `\n${definition}`;
+              injectedNames.add(name);
+            }
+          }
         }
 
-        const fenceImports = (fenceContent.match(/import[\s\S]*?from\s*['"].*?['"];?/g) || []).join(
-          "\n"
-        );
         const markupWithFenceCode = applySharedCode(rawMarkup, fenceImports);
         const markupWithGlobals = applySharedCode(markupWithFenceCode, scriptToInject);
         const markupWithResolvedImports = resolveRelativeImports(markupWithGlobals, id);
         const hash = createHash("sha1").update(markupWithResolvedImports).digest("hex").slice(0, 8);
+        const virt = `${VIRT}${hash}.js`;
 
         let local = hashToLocal.get(hash);
         if (!local) {
           local = `Inline_${hash}`;
           hashToLocal.set(hash, local);
-          const virt = `${VIRT}${hash}.js`;
           if (!cache.has(virt)) cache.set(virt, markupWithResolvedImports);
 
           const hasModuleExports = moduleScriptExportRE.test(rawMarkup);
@@ -294,6 +327,9 @@ export default function inlineSveltePlugin({
             importsToAdd += `import ${local} from '${virt}';\n`;
           }
         }
+
+        // record so later templates can pull this component in via scope(...)
+        if (assignedName) localComponents.set(assignedName, virt);
 
         ms.overwrite(m.index, tplRE.lastIndex, local);
         edited = true;
@@ -321,6 +357,7 @@ export default function inlineSveltePlugin({
         generate: "client",
         css: "injected",
         filename: id,
+        runes: true,
       }).js.code;
     },
   };

@@ -14,7 +14,7 @@ const config = {
     adapter: adapter(),
 
     alias: {
-      inline: "./src/lib/index.js",
+      "test-utils": "./src/lib/index.js",
     },
   },
 };

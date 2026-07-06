@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render } from "vitest-browser-svelte";
 import SimpleComponentParent from "./plugin.svelte";
-import { html, type InlineSnippet } from "inline";
+import { html, scope, type InlineSnippet } from "test-utils";
 
 // svelte:defs
 import { MemoryRouter, Routes, Route } from "@hvniel/svelte-router";
@@ -114,11 +114,7 @@ describe("Inline Svelte Components with sv", () => {
     const HomeComponent = html`<h1>Home Page</h1>`;
     const AboutComponent = html`<h1>About Page</h1>`;
 
-    const App = html`
-      <script>
-				let {HomeComponent, AboutComponent} = $props();
-      </script>
-
+    const App = scope(HomeComponent, AboutComponent).html`
       <MemoryRouter initialEntries={["/home"]}>
         <Routes>
           <Route path="home" Component={HomeComponent} />
@@ -237,6 +233,40 @@ describe("Inline Svelte Components with sv", () => {
         </h1>
         <!---->
         0
+      </div>
+    `);
+  });
+
+  it("supports local components with scope", () => {
+    const LocalFrank = html`<h1>Local Frank</h1>`;
+    const A = scope(LocalFrank).html`<div><LocalFrank />{count}</div>`;
+
+    const screen = render(A);
+
+    expect(screen.container.firstElementChild).toMatchInlineSnapshot(`
+      <div>
+        <h1>
+          Local Frank
+        </h1>
+        <!---->
+        0
+      </div>
+    `);
+  });
+
+  it("lets scoped components shadow global components", () => {
+    // local Frank takes precedence over the fence-global Frank
+    const Frank = html`<h1>Shadowed Frank</h1>`;
+    const B = scope(Frank).html`<div><Frank /></div>`;
+
+    const screen = render(B);
+
+    expect(screen.container.firstElementChild).toMatchInlineSnapshot(`
+      <div>
+        <h1>
+          Shadowed Frank
+        </h1>
+        <!---->
       </div>
     `);
   });
